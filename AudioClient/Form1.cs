@@ -2,28 +2,25 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Configuration;
-using System.Data;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Media;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using WMPLib;
+using AudioService;
 
 namespace AudioClient
 {
     public partial class Form1 : Form
     {
-        System.Net.Sockets.TcpClient clientSocket = new System.Net.Sockets.TcpClient();
+        Proxy _proxy;
         BackgroundWorker bw = new BackgroundWorker();
         private string currentFile = "";
         int bytesRead = 0;
         private int totalLength = 0;
-        private Dictionary<string,string> hosts = new Dictionary<string, string>();
+        private List<Host> hosts = new List<Host>();
 
         public Form1()
         {
@@ -48,54 +45,68 @@ namespace AudioClient
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            listView1.View = View.SmallIcon;
+            //listView1.View = View.SmallIcon;
+            dirList.View = View.List;
+            dirList.Items.Clear();
             msg("Client Started");
 
             var x = ConfigurationManager.AppSettings;
 
-            foreach (NameValueConfigurationElement v in x)
-            {
-                // get server address and port info from config file
-                hosts.Add(v.Name,v.Value);
-            }
+
+            // get server address and port info from config file
+            hosts.Add(new Host("default",x.Get(0),Convert.ToInt32(x.Get(1))));
 
             try
             {
-                clientSocket.Connect(hosts["defaulthost"], Convert.ToInt32(hosts["defaultport"]));
+                _proxy = new Proxy(hosts[0]);
             }
             catch (SocketException ex)
             {
-                DialogResult r = MessageBox.Show("Couldn't Connect! Please add a valid host and port.");
+                MessageBox.Show("Couldn't Connect! Please add a valid host and port.");
                 this.Close();
             }
-           
+
+            if (_proxy.Connected())
+            {
+                var bytes = _proxy.ListDir(@"C:\");
+                var s = Encoding.ASCII.GetString(bytes);
+                var list = s.Split(';').ToList(); 
+                StringBuilder b = new StringBuilder();
+                list.ForEach(d =>
+                {
+                    dirList.Items.Add(d);
+                });
+            }
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            if (!clientSocket.Connected)
-                return;
-            NetworkStream serverStream = clientSocket.GetStream();
-            byte[] outStream = System.Text.Encoding.ASCII.GetBytes(textBox2.Text + "$");
-            serverStream.Write(outStream, 0, outStream.Length);
-            serverStream.Flush();
+            //if (!clientSocket.Connected)
+            //    return;
+            //NetworkStream serverStream = clientSocket.GetStream();
+            //byte[] outStream = Encoding.ASCII.GetBytes(textBox2.Text + "$");
+            //serverStream.Write(outStream, 0, outStream.Length);
+            //serverStream.Flush();
 
-            byte[] inStream = new byte[65536];
+            //// ok
+            //byte[] inStream = new byte[65536];
 
-            int counter = 0;
-            while (!serverStream.DataAvailable)
-            {
-                Thread.Sleep(50);
-                counter++;
-                if (counter > 50)
-                    return;
-            }
-            serverStream.Read(inStream, 0, (int)clientSocket.ReceiveBufferSize);
-            string returndata = System.Text.Encoding.ASCII.GetString(inStream);
-            msg(returndata);
-            textBox2.Text = "";
-            textBox2.Focus();
+            //int counter = 0;
+            //while (!serverStream.DataAvailable)
+            //{
+            //    Thread.Sleep(50);
+            //    counter++;
+            //    if (counter > 50)
+            //        return;
+            //}
+            //serverStream.Read(inStream, 0, (int)clientSocket.ReceiveBufferSize);
+            //string returndata = Encoding.ASCII.GetString(inStream);
+            //msg(returndata);
+            //textBox2.Text = "";
+            //textBox2.Focus();
         }
+
+
 
         public void msg(string mesg)
         {
@@ -115,7 +126,7 @@ namespace AudioClient
             if (s.SelectedItems.Count <= 0)
                 return;
 
-            if (!clientSocket.Connected)
+            if (!_proxy.Connected())
                 return;
 
             GetLength(s.SelectedItems[0].Text);
@@ -133,34 +144,7 @@ namespace AudioClient
 
         void GetLength(string fileName)
         {
-            NetworkStream serverStream = clientSocket.GetStream();
-            byte[] outStream = System.Text.Encoding.ASCII.GetBytes("gl" + fileName + "$");
-            serverStream.Write(outStream, 0, outStream.Length);
-            serverStream.Flush();
-
-
-
-            int counter = 0;
-            while (!serverStream.DataAvailable)
-            {
-                Thread.Sleep(50);
-                counter++;
-                if (counter > 50)
-                    return;
-            }
-
-            byte[] inStream;
-            using (var stream = new MemoryStream())
-            {
-                byte[] buffer = new byte[2048]; // read in chunks of 2KB
-                int bytesRead;
-                serverStream.Read(buffer, 0, buffer.Length);
-
-                //byte[] result = stream.ToArray();
-                inStream = buffer;
-            }
-            string s = Encoding.ASCII.GetString(inStream);
-            totalLength = Convert.ToInt32(s);
+            totalLength = _proxy.GetLength(fileName);
 
             progressBar1.Maximum = totalLength;
             progressBar1.Step = 2048*100;
@@ -169,79 +153,89 @@ namespace AudioClient
 
         void Read(string fileName)
         {
-            NetworkStream serverStream = clientSocket.GetStream();
-            byte[] outStream = System.Text.Encoding.ASCII.GetBytes("pl" + fileName + "$");
-            serverStream.Write(outStream, 0, outStream.Length);
-            serverStream.Flush();
+            //NetworkStream serverStream = clientSocket.GetStream();
+            //byte[] outStream = Encoding.ASCII.GetBytes("pl" + fileName + "$");
+            //serverStream.Write(outStream, 0, outStream.Length);
+            //serverStream.Flush();
+
+            byte[] result = new byte[99999999];
+
+            //int counter = 0;
+            //while (!serverStream.DataAvailable)
+            //{
+            //    Thread.Sleep(500);
+            //    counter++;
+            //    if (counter > 100)
+            //        return;
+            //}
 
 
-
-            int counter = 0;
-            while (!serverStream.DataAvailable)
-            {
-                Thread.Sleep(500);
-                counter++;
-                if (counter > 100)
-                    return;
-            }
-
-            byte[] inStream = new byte[99999999];
-
-            try
-            {
-                using (var stream = new MemoryStream())
-                {
+            //try
+            //{
+            //    using (var stream = new MemoryStream())
+            //    {
                     
-                    bytesRead = 0;
-                    int totalRead = 0;
-                    int pRead = 0;
-                    int toRead = totalLength;
+            //        bytesRead = 0;
+            //        int totalRead = 0;
+            //        int pRead = 0;
+            //        int toRead = totalLength;
 
-                    while (toRead > 0)
-                    {
-                        byte[] buffer = new byte[totalLength]; 
-                        int n = serverStream.Read(buffer, bytesRead, toRead);
-                        // The end of the file is reached.
-                        if (n == 0)
-                        {
-                            break;
-                        }
+            //        while (toRead > 0)
+            //        {
+            //            byte[] buffer = new byte[totalLength]; 
+            //            int n = serverStream.Read(buffer, bytesRead, toRead);
+            //            // The end of the file is reached.
+            //            if (n == 0)
+            //            {
+            //                break;
+            //            }
 
-                        stream.Write(buffer,bytesRead,n);
-                        bytesRead += n;
-                        bw.ReportProgress(bytesRead);
-                        toRead -= n;
-                    }
-
-
-                    byte[] result = stream.ToArray();
-                    inStream = result;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-            }
+            //            stream.Write(buffer,bytesRead,n);
+            //            bytesRead += n;
+            //            bw.ReportProgress(bytesRead);
+            //            toRead -= n;
+            //        }
 
 
-            using (MemoryStream ms = new MemoryStream(inStream))
-            {
-                // Construct the sound player
-                SoundPlayer player = new SoundPlayer(ms);
-                MediaPlayer m = new MediaPlayer(ms.ToArray());
-                m.Play();
-            }
+            //        result = stream.ToArray();
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    MessageBox.Show(ex.Message);
+            //}
+
+            result = _proxy.Play(currentFile);
+
+            //result = _proxy.Play(fileName);
+
+            // Construct the sound player
+            MediaPlayer m = new MediaPlayer(result);
+            m.Play();
+        }
+
+        private void dirList_DoubleClick(object sender, EventArgs e)
+        {
+            // do stuff
+            _proxy.ListDir(dirList.SelectedItems[0].Text);
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            _proxy.RequestClose();
+            _proxy.Dispose();
         }
     }
 
     class MediaPlayer
     {
-        System.Media.SoundPlayer soundPlayer;
+        SoundPlayer soundPlayer;
         public MediaPlayer(byte[] buffer)
         {
             MemoryStream memoryStream = new MemoryStream(buffer, true);
-            soundPlayer = new System.Media.SoundPlayer(memoryStream);
+            soundPlayer = new SoundPlayer(memoryStream);
         }
+
         public void Play() { soundPlayer.Play(); }
         public void Play(byte[] buffer)
         {

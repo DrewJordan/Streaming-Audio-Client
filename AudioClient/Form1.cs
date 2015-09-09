@@ -17,10 +17,11 @@ namespace AudioClient
     {
         Proxy _proxy;
         BackgroundWorker bw = new BackgroundWorker();
-        private string currentFile = "";
+        private string _currentFile = "";
         int bytesRead = 0;
         private int totalLength = 0;
         private List<Host> hosts = new List<Host>();
+        private string _currentDirectory = "";
 
         public Form1()
         {
@@ -45,10 +46,9 @@ namespace AudioClient
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            //listView1.View = View.SmallIcon;
+            listView1.View = View.List;
             dirList.View = View.List;
             dirList.Items.Clear();
-            msg("Client Started");
 
             var x = ConfigurationManager.AppSettings;
 
@@ -64,18 +64,13 @@ namespace AudioClient
             {
                 MessageBox.Show("Couldn't Connect! Please add a valid host and port.");
                 this.Close();
+                return;
             }
 
             if (_proxy.Connected())
             {
                 var bytes = _proxy.ListDir(@"C:\");
-                var s = Encoding.ASCII.GetString(bytes);
-                var list = s.Split(';').ToList(); 
-                StringBuilder b = new StringBuilder();
-                list.ForEach(d =>
-                {
-                    dirList.Items.Add(d);
-                });
+                BindList(bytes);
             }
         }
 
@@ -130,7 +125,7 @@ namespace AudioClient
                 return;
 
             GetLength(s.SelectedItems[0].Text);
-            currentFile = s.SelectedItems[0].Text;
+            _currentFile = s.SelectedItems[0].Text;
 
             bw.RunWorkerAsync();
 
@@ -139,7 +134,7 @@ namespace AudioClient
 
         void bw_DoWork(object sender, DoWorkEventArgs e)
         {
-            Read(currentFile);
+            Read(_currentFile);
         }
 
         void GetLength(string fileName)
@@ -205,25 +200,101 @@ namespace AudioClient
             //    MessageBox.Show(ex.Message);
             //}
 
-            result = _proxy.Play(currentFile);
+            result = _proxy.Play(_currentFile);
 
-            //result = _proxy.Play(fileName);
-
-            // Construct the sound player
             MediaPlayer m = new MediaPlayer(result);
-            m.Play();
+            m.Play(result);
         }
 
         private void dirList_DoubleClick(object sender, EventArgs e)
         {
-            // do stuff
-            _proxy.ListDir(dirList.SelectedItems[0].Text);
+            if (dirList.SelectedItems.Count <= 0)
+                return;
+            if (dirList.SelectedItems[0].Text == "..")
+            {
+                _currentDirectory = _currentDirectory.Substring(0, _currentDirectory.LastIndexOf('\\'));
+            }
+            else
+            {
+                _currentDirectory = dirList.SelectedItems[0].Text;
+            }
+            var ret = _proxy.ListDir(dirList.SelectedItems[0].Text);
+            BindList(ret);
+        }
+
+        private void BindList(byte[] bytes)
+        {
+            var s = Encoding.ASCII.GetString(bytes);
+            if (s.StartsWith("ex"))
+            {
+                MessageBox.Show(s.Substring(2));
+                return;
+            }
+
+            dirList.Items.Clear();
+            dirList.Items.Add("..");
+            var list = s.Split(';').ToList();
+            list.ForEach(d =>
+            {
+                dirList.Items.Add(d);
+            });
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (_proxy != null)
             _proxy.RequestClose();
-            _proxy.Dispose();
+        }
+
+        private void listView1_DragDrop(object sender, DragEventArgs e)
+        {
+            Cursor = Cursors.Default;
+            string file;
+            GetFilename(out file, e);
+            listView1.Items.Add(file);
+        }
+
+        protected bool GetFilename(out string filename, DragEventArgs e)
+        {
+            bool ret = false;
+            filename = String.Empty;
+
+            if ((e.AllowedEffect & DragDropEffects.Copy) == DragDropEffects.Copy)
+            {
+                Array data = ((IDataObject)e.Data).GetData("FileName") as Array;
+                if (data != null)
+                {
+                    if ((data.Length == 1) && (data.GetValue(0) is String))
+                    {
+                        filename = ((string[])data)[0];
+                        ret = true;
+                    }
+                }
+            }
+            return ret;
+        }
+
+        private void listView1_DragEnter(object sender, DragEventArgs e)
+        {
+            Cursor = Cursors.Cross;
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            if (dirList.SelectedItems.Count <= 0)
+            {
+                return;
+            }
+
+            listView1.Items.Add(dirList.SelectedItems[0].Text);
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            byte[] bytes = File.ReadAllBytes(@"C:\Users\drewj_000\Downloads\23 2000 - Jazzmasters - The Greatest Hits ( 320kbps )\01.Shine .mp3");
+
+            MediaPlayer m = new MediaPlayer(bytes);
+            m.Play(bytes);
         }
     }
 
@@ -240,7 +311,7 @@ namespace AudioClient
         public void Play(byte[] buffer)
         {
             soundPlayer.Stream.Seek(0, SeekOrigin.Begin);
-            soundPlayer.Stream.Write(buffer, 0, buffer.Length);
+            //soundPlayer.Stream.Write(buffer, 0, buffer.Length);
             soundPlayer.Play();
         }
     }

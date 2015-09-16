@@ -69,36 +69,14 @@ namespace AudioClient
 
             if (_proxy.Connected())
             {
-                var bytes = _proxy.ListDir(@"C:\");
+                var bytes = _proxy.ListDir(x.Get(2));
                 BindList(bytes);
             }
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            //if (!clientSocket.Connected)
-            //    return;
-            //NetworkStream serverStream = clientSocket.GetStream();
-            //byte[] outStream = Encoding.ASCII.GetBytes(textBox2.Text + "$");
-            //serverStream.Write(outStream, 0, outStream.Length);
-            //serverStream.Flush();
 
-            //// ok
-            //byte[] inStream = new byte[65536];
-
-            //int counter = 0;
-            //while (!serverStream.DataAvailable)
-            //{
-            //    Thread.Sleep(50);
-            //    counter++;
-            //    if (counter > 50)
-            //        return;
-            //}
-            //serverStream.Read(inStream, 0, (int)clientSocket.ReceiveBufferSize);
-            //string returndata = Encoding.ASCII.GetString(inStream);
-            //msg(returndata);
-            //textBox2.Text = "";
-            //textBox2.Focus();
         }
 
 
@@ -148,59 +126,9 @@ namespace AudioClient
 
         void Read(string fileName)
         {
-            //NetworkStream serverStream = clientSocket.GetStream();
-            //byte[] outStream = Encoding.ASCII.GetBytes("pl" + fileName + "$");
-            //serverStream.Write(outStream, 0, outStream.Length);
-            //serverStream.Flush();
-
             byte[] result = new byte[99999999];
 
-            //int counter = 0;
-            //while (!serverStream.DataAvailable)
-            //{
-            //    Thread.Sleep(500);
-            //    counter++;
-            //    if (counter > 100)
-            //        return;
-            //}
-
-
-            //try
-            //{
-            //    using (var stream = new MemoryStream())
-            //    {
-                    
-            //        bytesRead = 0;
-            //        int totalRead = 0;
-            //        int pRead = 0;
-            //        int toRead = totalLength;
-
-            //        while (toRead > 0)
-            //        {
-            //            byte[] buffer = new byte[totalLength]; 
-            //            int n = serverStream.Read(buffer, bytesRead, toRead);
-            //            // The end of the file is reached.
-            //            if (n == 0)
-            //            {
-            //                break;
-            //            }
-
-            //            stream.Write(buffer,bytesRead,n);
-            //            bytesRead += n;
-            //            bw.ReportProgress(bytesRead);
-            //            toRead -= n;
-            //        }
-
-
-            //        result = stream.ToArray();
-            //    }
-            //}
-            //catch (Exception ex)
-            //{
-            //    MessageBox.Show(ex.Message);
-            //}
-
-            result = _proxy.Play(_currentFile);
+            result = _proxy.Play(_currentFile, totalLength);
 
             MediaPlayer m = new MediaPlayer(result);
             m.Play(result);
@@ -212,13 +140,13 @@ namespace AudioClient
                 return;
             if (dirList.SelectedItems[0].Text == "..")
             {
-                _currentDirectory = _currentDirectory.Substring(0, _currentDirectory.LastIndexOf('\\'));
+                _currentDirectory = _currentDirectory.Substring(0, _currentDirectory.LastIndexOf('\\') + 1);
             }
             else
             {
                 _currentDirectory = dirList.SelectedItems[0].Text;
             }
-            var ret = _proxy.ListDir(dirList.SelectedItems[0].Text);
+            var ret = _proxy.ListDir(_currentDirectory);
             BindList(ret);
         }
 

@@ -4,13 +4,14 @@ using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace AudioService
 {
     public class Proxy : IDisposable
     {
         private readonly TcpClient _clientSocket = new TcpClient();
-        private Host _host = new Host();
+        private readonly Host _host;
 
         public Proxy(Host host)
         {
@@ -45,15 +46,19 @@ namespace AudioService
         public int GetLength(string filePath)
         {
             var x = SendAndReceive("gl" + filePath);
+            var z = Encoding.UTF8.GetString(x);
+            z += " ";
+            z += " ";
             var y = Convert.ToInt32(Encoding.UTF8.GetString(x));
             return y;
         }
 
-        private byte[] SendAndReceive(string msg)
+        private byte[] SendAndReceive(string msg, long amountToRead = 0)
         {
             Send(msg, _clientSocket.GetStream());
             //int numBytes = ReceiveLength(_clientSocket.GetStream());
-            byte[] ret = Receive(_clientSocket.GetStream());
+            Task.Delay(500);
+            byte[] ret = Receive(_clientSocket.GetStream(), amountToRead);
             return ret; 
         }
 
@@ -84,10 +89,14 @@ namespace AudioService
         //    }
         //}
 
-        private byte[] Receive(NetworkStream stream)
+        private byte[] Receive(NetworkStream stream, long amountToRead = 0)
         {
             byte[] bytes;
-            byte[] data = new byte[1024];
+            if (amountToRead > 0)
+                bytes = new byte[amountToRead];
+            
+            byte[] data = new byte[8192];
+            long amountRead = 0;
             using (MemoryStream ms = new MemoryStream())
             {
 
@@ -96,7 +105,23 @@ namespace AudioService
                 {
                     numBytesRead = stream.Read(data, 0, data.Length);
                     ms.Write(data, 0, numBytesRead);
-                } while (numBytesRead > 0 && stream.DataAvailable);
+                    amountRead += numBytesRead;
+                    if (amountToRead == 0)
+                        amountToRead = numBytesRead;
+                    if (!stream.DataAvailable)
+                        Task.Delay(500);
+                    if (amountToRead == 0)
+                    {
+                        if (numBytesRead > 0 && stream.DataAvailable && amountRead <= amountToRead)
+                            break;
+                    }
+                    else if (amountRead >= amountToRead)
+                    {
+                        string s = ";";
+                        break;
+                    }
+
+                } while (true);
                 bytes = ms.ToArray();
             }
 
@@ -125,9 +150,9 @@ namespace AudioService
             return bytes;
         }
 
-        public byte[] Play(string fileName)
+        public byte[] Play(string fileName, long amountToRead = 0)
         {
-            var x = SendAndReceive("pl" + fileName);
+            var x = SendAndReceive("pl" + fileName, amountToRead);
             return x;
         }
 
@@ -138,7 +163,9 @@ namespace AudioService
 
         public void RequestClose()
         {
+            _clientSocket.GetStream().Dispose();
             _clientSocket.Close();
+            //_clientSocket.GetStream().Dispose();
             //Send("cl",_clientSocket.GetStream());
         }
     }
